@@ -7,82 +7,74 @@
 
 import SwiftUI
 import CoreData
+import SwiftUICharts
 
 struct ContentView: View {
+    @EnvironmentObject var transactionListsVM: TransactionListViewModel
     @Environment(\.managedObjectContext) private var viewContext
-
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \Item.timestamp, ascending: true)],
-        animation: .default)
-    private var items: FetchedResults<Item>
 
     var body: some View {
         NavigationView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp!, formatter: itemFormatter)")
-                    } label: {
-                        Text(item.timestamp!, formatter: itemFormatter)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24.0) {
+                    // MARK: Title
+                    Text("Overview")
+                        .font(.title2)
+                        .bold()
+                        .foregroundColor(.text)
+                    // LineChart
+                    
+                    let data = transactionListsVM.accumulateTransaction()
+                    
+                    if !data.isEmpty {
+                        let totalExpenses = (data.last?.1 ?? 0.0).formatted(.currency(code: "USD"))
+                        CardView {
+                            VStack(alignment: .leading) {
+                                ChartLabel(totalExpenses, type: .title, format: "$%.02F")
+                                LineChart()
+                            }
+                            .background(Color.systemBackground)
+                        }
+                        .data(data)
+                        .chartStyle(ChartStyle(backgroundColor: Color.systemBackground, foregroundColor: [ColorGradient(Color.icon.opacity(0.4), Color.icon)]))
+                        .frame(height: 300)
                     }
+                    
+                    RecentTransactionsList()
                 }
-                .onDelete(perform: deleteItems)
+                .padding()
+                .frame(maxWidth: .infinity)
             }
+            .foregroundColor(Color.background)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
                 ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
+                    Image(systemName: "bell.badge")
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(Color.icon, .primary)
                 }
             }
-            Text("Select an item")
+            .accentColor(Color.icon)
         }
+        .navigationViewStyle(.stack)
+        .accentColor(.primary)
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-
-            do {
-                try viewContext.save()
-            } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-            }
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            offsets.map { items[$0] }.forEach(viewContext.delete)
-
-            do {
-                try viewContext.save()
-            } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-            }
-        }
-    }
 }
 
-private let itemFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .short
-    formatter.timeStyle = .medium
-    return formatter
-}()
-
 struct ContentView_Previews: PreviewProvider {
+    
+    static let transactionListVM: TransactionListViewModel = {
+        let vm = TransactionListViewModel()
+        vm.transactions = transactionListPreviewData
+        return vm
+    }()
+    
     static var previews: some View {
-        ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+        Group {
+            ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+            ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext).preferredColorScheme(.dark)
+        }
+        .environmentObject(transactionListVM)
     }
 }
